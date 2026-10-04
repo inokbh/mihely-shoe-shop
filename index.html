@@ -202,8 +202,9 @@ tbody tr:hover td{background:#f7f9fb}
    1) PASTE YOUR FIREBASE CONFIG HERE
       (Firebase console > Project settings > Your apps > Web app)
    ================================================================ */
-
 // Import the functions you need from the SDKs you need
+
+
 import { initializeApp } from "firebase/app";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
@@ -218,10 +219,9 @@ const firebaseConfig = {
   appId: "1:1010956667223:web:530f110aaf3d1a7d3f9612"
 };
 
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-
-
 /* 2) LOGINS – username "inok" signs in as inok@mihely.app, and so on.
       Create these users in Firebase > Authentication.               */
 const EMAIL_DOMAIN = 'mihely.app';
@@ -239,9 +239,9 @@ let db = DEFAULT_DB();
 const CONFIGURED = !firebaseConfig.apiKey.startsWith('PASTE') && typeof firebase!=='undefined';
 let fs=null, auth=null;
 if(CONFIGURED){
-  firebase.initializeApp(firebaseConfig);
-  auth=firebase.auth(); fs=firebase.firestore();
-  fs.enablePersistence({synchronizeTabs:true}).catch(()=>{});   // keeps working offline
+  try{firebase.initializeApp(firebaseConfig);
+  auth=firebase.auth(); fs=firebase.firestore();}catch(e){console.error(e);setTimeout(()=>{const m=document.getElementById('l_msg');if(m)m.textContent='firebaseConfig is not valid: '+e.message;},0);}
+  if(fs)fs.enablePersistence({synchronizeTabs:true}).catch(()=>{});   // keeps working offline
 }
 
 /* ---------- cloud sync ---------- */
@@ -419,12 +419,29 @@ const PAGES=[
 ];
 function emailOf(u){u=u.trim().toLowerCase();return u.includes('@')?u:u+'@'+EMAIL_DOMAIN;}
 async function doLogin(){
-  if(!auth){$('#l_msg').textContent='Firebase is not connected yet.';return;}
+  if(typeof firebase==='undefined'){$('#l_msg').textContent='Firebase did not load. Check the internet connection and reload the page.';return;}
+  if(!auth){$('#l_msg').textContent='Firebase is not connected yet: the firebaseConfig values in index.html still say PASTE_…';return;}
   const b=$('#l_btn');b.disabled=true;b.textContent='Signing in…';$('#l_msg').textContent='';
-  try{await auth.signInWithEmailAndPassword(emailOf(val('l_user')),val('l_pass'));$('#l_pass').value='';}
-  catch(e){$('#l_msg').textContent=e.code==='auth/network-request-failed'?'No internet connection. Connect once to sign in.':'Username or password is incorrect.';}
+  const email=emailOf(val('l_user'));
+  try{await auth.signInWithEmailAndPassword(email,val('l_pass'));$('#l_pass').value='';}
+  catch(e){console.error(e);$('#l_msg').textContent=loginErr(e,email);}
   b.disabled=false;b.textContent='Sign in';
 }
+function loginErr(e,email){const c=e.code||'',h=location.hostname;
+  const M={
+   'auth/invalid-credential':`Wrong password, or the user ${email} does not exist. Check Firebase > Authentication > Users.`,
+   'auth/wrong-password':'Wrong password.',
+   'auth/user-not-found':`No user ${email}. Add it in Firebase > Authentication > Users.`,
+   'auth/invalid-email':`"${email}" is not a valid login.`,
+   'auth/operation-not-allowed':'Email/Password sign-in is not enabled. Firebase > Authentication > Sign-in method > Email/Password > Enable.',
+   'auth/unauthorized-domain':`This website (${h}) is not allowed. Firebase > Authentication > Settings > Authorized domains > Add domain: ${h}`,
+   'auth/invalid-api-key':'The apiKey in firebaseConfig is wrong. Copy it again from Firebase > Project settings.',
+   'auth/api-key-not-valid.-please-pass-a-valid-api-key.':'The apiKey in firebaseConfig is wrong. Copy it again from Firebase > Project settings.',
+   'auth/configuration-not-found':'Authentication is not set up. Firebase > Authentication > Get started, then enable Email/Password.',
+   'auth/network-request-failed':'No internet connection. Connect once to sign in.',
+   'auth/too-many-requests':'Too many failed tries. Wait a few minutes and try again.',
+   'auth/user-disabled':'This user is disabled in Firebase.'};
+  return (M[c]||'Sign-in failed: '+(e.message||c))+(c?'  ['+c+']':'');}
 function logout(){state.cart=[];if(auth)auth.signOut();}
 function toggleMenu(open){$('#side').classList.toggle('open',open);$('#scrim').classList.toggle('show',open);}
 function boot(){
